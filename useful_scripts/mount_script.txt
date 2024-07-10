@@ -1,0 +1,19 @@
+# mounting a disk using offset this is not usefull because we need to claculate the offset
+sudo mount -v -o offset=3062890496 -t ext4 ./Ubuntu.img /mnt/
+############################
+
+# alternatively you can mount the squashfs backup by using kpartx
+# Mount the squashfs backup at any empty directory
+sudo mount DiskImage_21_10_2021__09_04_46_AM.img empty-dir/
+# use kpart
+sudo kpartx -v -a empty-dir/DiskImage_21_10_2021__09_04_46_AM_backup.img
+# Nou you can see drisck in mapper
+ls /dev/mapper/loop15p*
+# you can also see in lsbklk
+lsblk
+# if the disk is luks encrypt do the folowing
+sudo cryptsetup luksOpen /dev/mapper/loop15p5 arc_vaio
+# you can use sblk to see the decrypted disk
+sblk
+# you can mount using read only
+sudo mount -o ro,noload  /dev/mapper/elementary--vg-root /mnt/

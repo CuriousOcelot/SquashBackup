@@ -1,0 +1,9 @@
+# for backuping in tarball
+
+# to tar a folder run this script
+sudo tar -cf tar_compresed_folder.tar /mnt/
+# save the checksum of tar file
+sudo md5sum tar_compresed_folder.tar > tar_compresed_folder.tar.md5sum
+# to view tar content
+sudo tar -tvf tar_compresed_folder.tar
+

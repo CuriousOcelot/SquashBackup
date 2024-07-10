@@ -1,0 +1,210 @@
+#!/usr/bin/python3
+
+import argparse
+import logging
+import os
+import shlex
+import stat
+import subprocess
+import sys
+import unicodedata
+from datetime import datetime
+import re
+
+import qprompt as qprompt
+
+
+def get_cmd_args(args: list = None):
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "-d",
+        "--drive",
+        metavar="DRIVE",
+        help="The name of the drive",
+        required=True,
+    )
+    parser.add_argument(
+        "-n",
+        "--backup_name",
+        metavar="BACKUP",
+        help="The name of the backup",
+        required=True,
+    )
+
+    parser.add_argument(
+        "-a",
+        "--auto_date",
+        action="store_true",
+        dest="autodate",
+        help="Derive date for backup name",
+    )
+
+    return parser.parse_args(args)
+
+
+def main():
+    CURRENT_DIR = os.getcwd()
+    if len(os.listdir(CURRENT_DIR)) != 0:
+        print("Please run in an empty directory!")
+        sys.exit()
+    arguments = get_cmd_args()
+    autodate = arguments.autodate
+
+    backupname = slugify(arguments.backup_name)
+    if autodate:
+        backupname += "_" + datetime.now().strftime("%d_%m_%Y__%I_%M_%S_%p")
+
+    ##########derive the names##########
+    image = backupname + ".img"
+    image_backup = backupname + "_backup.img"
+    drive_name = arguments.drive
+    ####################################
+    # Check if drive exist
+    if not disk_exists(drive_name):
+        print(f"{drive_name} does not disk_exists")
+        return
+    ##################################
+    emptydir = os.path.join(CURRENT_DIR, "empty-dir")
+    if os.path.isdir(emptydir) or os.path.isfile(emptydir):
+        print(f"{emptydir} is already exist")
+        return  # TODO
+
+    if not qprompt.ask_yesno(f"Disk: '{drive_name}' , Name: {image}", dft="y"):
+        return
+
+    ################# prepare for backup##############
+    os.makedirs(emptydir)  # TODO
+
+    # as i am not a bash shell script expert , lets make a backup oneliner temporary script
+    temp_one_line_backup = f'#!/bin/bash\nsudo dd if={drive_name} bs=4M status=progress | tee >(md5sum > {os.path.join(CURRENT_DIR, "original_disk_sum.md5sum")})'
+    temp_script_loc = os.path.join(CURRENT_DIR, "bck_script.sh")
+    with open(temp_script_loc, "w") as writer:
+        writer.write(temp_one_line_backup)
+    # give permision to execute
+    execute_command(f"chmod +x {temp_script_loc}", CURRENT_DIR)
+    # now run the back up script
+    cmd = f"sudo mksquashfs {emptydir} {image} -p '{image_backup} f 444 root root {temp_script_loc}'"
+    print(cmd)
+    execute_command_simple(cmd, CURRENT_DIR)  # TODO
+    # TODO remove the temporry script
+    os.remove(temp_script_loc)
+    ############### check checksum ##################
+    sum_ori = read_file(os.path.join(CURRENT_DIR, "original_disk_sum.md5sum"))  # read the cheksum of the original disk
+
+    # cheksum the squashed image backup
+    md5sum_backup = get_cheksum_cmd(image)  # f"sudo md5sum {image} > {image}.md5sum"
+    sum_backup_fsquase = execute_command(md5sum_backup, CURRENT_DIR)
+    with open(os.path.join(CURRENT_DIR, image + ".md5sum"), "w") as writable:
+        writable.write(sum_backup_fsquase)
+
+    #########cheksum the mounted drive##########
+    mount = f"sudo mount {image} {emptydir}"
+    execute_command(mount, CURRENT_DIR)
+    md5sum_backup_image = get_cheksum_cmd(os.path.join(emptydir, image_backup))
+    sum_backup = execute_command(md5sum_backup_image, CURRENT_DIR)
+
+    #########check backup image filesize##########
+    check_backup_image_filesize_cmd=f'stat --format="%s" {os.path.join(emptydir, image_backup)}'
+    backup_image_filesize = int(execute_command(check_backup_image_filesize_cmd, CURRENT_DIR))
+    #########unmount the image##########
+
+    umount = f"sudo umount {emptydir}"
+    execute_command(umount, CURRENT_DIR)
+    ################################
+
+    #########check disksize##########
+    check_disksize_cmd = f'sudo blockdev --getsize64 {drive_name}'
+    disk_size = int(execute_command(check_disksize_cmd, CURRENT_DIR))
+
+    print("")
+    print(f"disk size: {disk_size} bytes")
+    print(f"backup img size: {backup_image_filesize} bytes")
+
+    backup_error_message=[]
+    if disk_size!=backup_image_filesize:
+        backup_error_message.append("disk image and backup image size not equal.")
+
+    print("")
+    print(f"disk sum: {sum_ori}")
+    print(f"bckmnt sum: {sum_backup}")
+    print(f"backup sum: {sum_backup_fsquase}")
+
+    if sum_ori.split(" ")[0] == sum_backup.split(" ")[0]:
+        pass
+    else:
+        backup_error_message.append("disk image and backup image checksum not equal.")
+
+    if len(backup_error_message)==0:
+        print("Backup successfull!!")
+    else:
+        print("Backup fail!!")
+        print("")
+        for _msg in backup_error_message:
+            print(f"* {_msg}")
+
+def get_cheksum_cmd(file):
+    return f"sudo md5sum {file}"
+
+
+def execute_command(command: str, path=None):
+    print(f"Command: {command}")
+    command_splited = shlex.split(command)
+    if path is None:
+        process = subprocess.Popen(command_splited, stdout=subprocess.PIPE)
+    else:
+        process = subprocess.Popen(command_splited, cwd=path, stdout=subprocess.PIPE)
+    out, err = process.communicate()
+    try:
+        out = out.decode("UTF-8")
+    except:
+        out = ""
+    return out
+
+
+def execute_command_simple(command: str, path=None):
+    print(f"Command: {command}")
+    command_splited = shlex.split(command)
+    if path is None:
+        process = subprocess.Popen(command_splited)
+    else:
+        process = subprocess.Popen(command_splited, cwd=path)
+    out, err = process.communicate()
+    try:
+        out = out.decode("UTF-8")
+    except:
+        out = ""
+    return out
+
+
+def disk_exists(path):
+    try:
+        return stat.S_ISBLK(os.stat(path).st_mode)
+    except:
+        return False
+
+
+def slugify(value, allow_unicode=False):
+    """
+    Taken from https://github.com/django/django/blob/master/django/utils/text.py
+    Convert to ASCII if 'allow_unicode' is False. Convert spaces or repeated
+    dashes to single dashes. Remove characters that aren't alphanumerics,
+    underscores, or hyphens. Convert to lowercase. Also strip leading and
+    trailing whitespace, dashes, and underscores.
+    """
+    value = str(value)
+    if allow_unicode:
+        value = unicodedata.normalize('NFKC', value)
+    else:
+        value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
+    value = re.sub(r'[^\w\s-]', '', value)
+    return re.sub(r'[-\s]+', '-', value).strip('-_')
+
+
+def read_file(path):
+    with open(path, "r") as reader:
+        return reader.read()
+
+
+if __name__ == "__main__":
+    main()
