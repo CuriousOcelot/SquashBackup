@@ -11,8 +11,6 @@ import unicodedata
 from datetime import datetime
 import re
 
-import qprompt as qprompt
-
 
 def get_cmd_args(args: list = None):
     parser = argparse.ArgumentParser()
@@ -70,9 +68,14 @@ def main():
         print(f"{emptydir} is already exist")
         return  # TODO
 
-    if not qprompt.ask_yesno(f"Disk: '{drive_name}' , Name: {image}", dft="y"):
-        return
-
+    while True:
+        user_input = input(f"Disk: '{drive_name}' , Name: '{image}' (y/n): ").strip().lower()
+        if user_input == 'y':
+            break  # Exit the loop since a valid input was received
+        elif user_input == 'n':
+            return
+        else:
+            print("Invalid input. Please enter 'y' or 'n'.")
     ################# prepare for backup##############
     os.makedirs(emptydir)  # TODO
 
