@@ -12,7 +12,8 @@
 #include <time.h>
 
 FILE *input_file = NULL;
-FILE *output_file = NULL;
+FILE *output_file_reader = NULL;
+FILE *output_file_writer = NULL;
 void *source_buffer = NULL;
 void *destination_buffer = NULL;
 
@@ -30,7 +31,8 @@ void print_error(const char *prefix, const char *file_name) {
 
 void cleanup() {
     if (input_file) fclose(input_file);
-    if (output_file) fclose(output_file);
+    if (output_file_reader) fclose(output_file_reader);
+    if (output_file_writer) fclose(output_file_writer);
     if (source_buffer) free(source_buffer);
     if (destination_buffer) free(destination_buffer);
 }
@@ -61,9 +63,14 @@ int main(int argc, char *argv[]) {
             }
         } else if (strncmp(argv[i], "of=", 3) == 0) {
             output_file_name = argv[i] + 3;
-            output_file = fopen(output_file_name, "r+b");
-            if (!output_file) {
-                print_error("Error opening: ", output_file_name);
+            output_file_reader = fopen(output_file_name, "rb");
+            if (!output_file_reader) {
+                print_error("Error opening[R]: ", output_file_name);
+                break;
+            }
+            output_file_writer = fopen(output_file_name, "r+b");
+            if (!output_file_writer) {
+                print_error("Error opening[W]: ", output_file_name);
                 break;
             }
         } else if (strncmp(argv[i], "bs=", 3) == 0) {
@@ -77,7 +84,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if (!input_file || !output_file) {
+    if (!input_file || !output_file_reader|!output_file_writer) {
         print_usage(argv[0]);
         encountered_error = true;
     }
@@ -141,12 +148,16 @@ int main(int argc, char *argv[]) {
         // initialize the buffer to store the remporary readed files
         clock_t start_time = clock();
         long total_read = 0;
+        long last_write_position = 0;
+        long current_seek_location = 0;
 
         //for printing progress
         size_t printed_count = 0;
         int write_not_write_decider = 0;
 
+
         while (count == 0 || total_read < count) {
+            current_seek_location = total_read * (long) block_size;
             uint64_t bytes_read_from_src = fread(source_buffer, 1, block_size, input_file);
             // check if the reading is completed
             if (!(bytes_read_from_src > 0)) {
@@ -155,7 +166,8 @@ int main(int argc, char *argv[]) {
             }
             // Move the file pointer to the specified start position for reading
 
-            uint64_t bytes_read_from_dest = fread(destination_buffer, 1, block_size, output_file);// it takes times
+            uint64_t bytes_read_from_dest = fread(destination_buffer, 1, block_size, output_file_reader);
+            // it taskes times
             if (!(bytes_read_from_dest > 0)) {
                 printf("Should not reach: Destination file may be short");
                 break;
@@ -166,12 +178,14 @@ int main(int argc, char *argv[]) {
                 // write_not_write_decider--;
             } else {
                 // re seek to write
-                if (fseek(output_file, -block_size, SEEK_CUR) != 0) {
+                long delta_location = current_seek_location - last_write_position;
+                if (fseek(output_file_writer, delta_location, SEEK_CUR) != 0) {
                     perror("Error seeking in file[Writing]");
                     break;
                 }
+                last_write_position = current_seek_location + (long) block_size;
                 write_not_write_decider++;
-                fwrite(source_buffer, 1, bytes_read_from_src, output_file);
+                fwrite(source_buffer, 1, bytes_read_from_src, output_file_writer);
             }
             total_read++;
             // print the progress
@@ -198,10 +212,10 @@ int main(int argc, char *argv[]) {
         free(destination_buffer);
 
         clock_t end_time = clock();
-        double elapsed_time = (double)(end_time - start_time) / CLOCKS_PER_SEC;
-        int hours = (int)(elapsed_time / 3600);
-        int minutes = (int)((elapsed_time - hours * 3600) / 60);
-        int seconds = (int)(elapsed_time - hours * 3600 - minutes * 60);
+        double elapsed_time = (double) (end_time - start_time) / CLOCKS_PER_SEC;
+        int hours = (int) (elapsed_time / 3600);
+        int minutes = (int) ((elapsed_time - hours * 3600) / 60);
+        int seconds = (int) (elapsed_time - hours * 3600 - minutes * 60);
         printf("Time consumed: %dh %dm %ds\n", hours, minutes, seconds);
     }
     // Clean up
