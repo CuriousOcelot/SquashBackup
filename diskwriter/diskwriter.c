@@ -155,7 +155,7 @@ int main(int argc, char *argv[]) {
             }
             // Move the file pointer to the specified start position for reading
 
-            uint64_t bytes_read_from_dest = fread(destination_buffer, 1, block_size, output_file);// it taskes times
+            uint64_t bytes_read_from_dest = fread(destination_buffer, 1, block_size, output_file);// it takes times
             if (!(bytes_read_from_dest > 0)) {
                 printf("Should not reach: Destination file may be short");
                 break;
