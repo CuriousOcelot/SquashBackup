@@ -1,5 +1,3 @@
-# Note Use Clonezilla it is better
-# But if you want real full disk use this
 # SquashFS Backup Script
 
 This repository contains a script to create a SquashFS backup of a disk, ensuring data integrity through checksum verification.
