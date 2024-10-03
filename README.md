@@ -7,10 +7,10 @@ This repository contains a script to create a SquashFS backup of a disk, ensurin
 
 The script performs the following tasks:
 
-1. Reads a disk and calculates its MD5 checksum.
-2. Uses the output of `dd` to compute the MD5 checksum without reading the disk again.
+1. Reads a disk and calculates its SHA256 checksum.
+2. Uses the output of `dd` to compute the SHA256 checksum without reading the disk again.
 3. Creates a SquashFS image of the disk using `mksquashfs`.
-4. Verifies the MD5 checksum of both the original disk and the SquashFS image to ensure data integrity.
+4. Verifies the SHA256 checksum of both the original disk and the SquashFS image to ensure data integrity.
 
 ## Usage
 

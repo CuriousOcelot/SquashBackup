@@ -80,7 +80,7 @@ def main():
     os.makedirs(emptydir)  # TODO
 
     # as i am not a bash shell script expert , lets make a backup oneliner temporary script
-    temp_one_line_backup = f'#!/bin/bash\nsudo dd if={drive_name} bs=4M status=progress | tee >(md5sum > {os.path.join(CURRENT_DIR, "original_disk_sum.md5sum")})'
+    temp_one_line_backup = f'#!/bin/bash\nsudo dd if={drive_name} bs=4M status=progress | tee >(sha256sum > {os.path.join(CURRENT_DIR, "original_disk_sum.sha256sum")})'
     temp_script_loc = os.path.join(CURRENT_DIR, "bck_script.sh")
     with open(temp_script_loc, "w") as writer:
         writer.write(temp_one_line_backup)
@@ -93,19 +93,19 @@ def main():
     # TODO remove the temporry script
     os.remove(temp_script_loc)
     ############### check checksum ##################
-    sum_ori = read_file(os.path.join(CURRENT_DIR, "original_disk_sum.md5sum"))  # read the cheksum of the original disk
+    sum_ori = read_file(os.path.join(CURRENT_DIR, "original_disk_sum.sha256sum"))  # read the cheksum of the original disk
 
     # cheksum the squashed image backup
-    md5sum_backup = get_cheksum_cmd(image)  # f"sudo md5sum {image} > {image}.md5sum"
-    sum_backup_fsquase = execute_command(md5sum_backup, CURRENT_DIR)
-    with open(os.path.join(CURRENT_DIR, image + ".md5sum"), "w") as writable:
+    sha256sum_backup = get_cheksum_cmd(image)  # f"sudo sha256sum {image} > {image}.sha256sum"
+    sum_backup_fsquase = execute_command(sha256sum_backup, CURRENT_DIR)
+    with open(os.path.join(CURRENT_DIR, image + ".sha256sum"), "w") as writable:
         writable.write(sum_backup_fsquase)
 
     #########cheksum the mounted drive##########
     mount = f"sudo mount {image} {emptydir}"
     execute_command(mount, CURRENT_DIR)
-    md5sum_backup_image = get_cheksum_cmd(os.path.join(emptydir, image_backup))
-    sum_backup = execute_command(md5sum_backup_image, CURRENT_DIR)
+    sha256sum_backup_image = get_cheksum_cmd(os.path.join(emptydir, image_backup))
+    sum_backup = execute_command(sha256sum_backup_image, CURRENT_DIR)
 
     #########check backup image filesize##########
     check_backup_image_filesize_cmd=f'stat --format="%s" {os.path.join(emptydir, image_backup)}'
@@ -147,7 +147,7 @@ def main():
             print(f"* {_msg}")
 
 def get_cheksum_cmd(file):
-    return f"sudo md5sum {file}"
+    return f"sudo sha256sum {file}"
 
 
 def execute_command(command: str, path=None):
