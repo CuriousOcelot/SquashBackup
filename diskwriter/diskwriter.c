@@ -111,21 +111,21 @@ int main(int argc, char *argv[]) {
 
     long inputfile_block_size = inputfile_stat.st_size / block_size;
     if (inputfile_block_size == 0) {
-        fprintf(stderr, "Input block size cannot be zero"); // Print the error message with a newline
-        encountered_error = true;
+        inputfile_block_size = 1; // so that we dont devide by zero when caculating pc
+        printf("input block size: unknown\n");
     }
     long outputfile_block_size = outputfile_stat.st_size / block_size;
 
     if (outputfile_stat.st_size == 0) {
-        printf("input block size: %lu  |  output block size: unknown\n", inputfile_block_size);
+        printf("output block size: unknown\n");
     } else {
         if (inputfile_stat.st_size > outputfile_stat.st_size) {
             fprintf(stderr, "Error: input file larger than destination file\n");
-            printf("input block size: %lu  |  output block size: %lu\n", inputfile_block_size, outputfile_block_size);
             encountered_error = true;
         }
     }
 
+    printf("input block size: %lu  |  output block size: %lu\n", inputfile_block_size, outputfile_block_size);
     void *source_buffer = malloc(block_size);
 
     if (!source_buffer) {
@@ -148,6 +148,7 @@ int main(int argc, char *argv[]) {
         // initialize the buffer to store the remporary readed files
         clock_t start_time = clock();
         long total_read = 0;
+        long progress_count = 0;
         long last_write_position = 0;
         long current_seek_location = 0;
 
@@ -188,8 +189,10 @@ int main(int argc, char *argv[]) {
                 fwrite(source_buffer, 1, bytes_read_from_src, output_file_writer);
             }
             total_read++;
+            progress_count++;
             // print the progress
-            if (total_read % 10000 == 0) {
+            if (progress_count > 10000) {
+                progress_count=0;
                 if (write_not_write_decider > 0) {
                     printf("#");
                 } else {
@@ -200,7 +203,7 @@ int main(int argc, char *argv[]) {
                 fflush(stdout);
             }
 
-            if (printed_count == 150) {
+            if (printed_count > 100) {
                 printed_count = 0;
                 double percentage = ((double) total_read / (double) inputfile_block_size) * 100;
                 printf(" [%lu/%lu] (%.2f%%)\n", total_read, inputfile_block_size, percentage);
