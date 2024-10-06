@@ -203,7 +203,7 @@ int main(int argc, char *argv[]) {
                 fflush(stdout);
             }
 
-            if (printed_count > 100) {
+            if (printed_count > 80) {
                 printed_count = 0;
                 double percentage = ((double) total_read / (double) inputfile_block_size) * 100;
                 printf(" [%lu/%lu] (%.2f%%)\n", total_read, inputfile_block_size, percentage);
