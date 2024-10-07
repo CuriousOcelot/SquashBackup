@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <signal.h>
 #include <time.h>
+#include <inttypes.h>
 
 FILE *input_file = NULL;
 FILE *output_file_reader = NULL;
@@ -45,12 +46,31 @@ void signal_handler(int signal) {
     exit(EXIT_FAILURE);
 }
 
+
+uint64_t parse_block_size(const char *arg) {
+    char *endptr;
+    uint64_t size = strtoull(arg, &endptr, 10);
+
+    if (*endptr == 'K' || *endptr == 'k') {
+        size *= 1024;
+    } else if (*endptr == 'M' || *endptr == 'm') {
+        size *= 1024 * 1024;
+    } else if (*endptr == 'G' || *endptr == 'g') {
+        size *= 1024 * 1024 * 1024;
+    } else if (*endptr != '\0') {
+        fprintf(stderr, "Invalid block size: %s\n", arg);
+        exit(EXIT_FAILURE);
+    }
+    return size;
+}
+
 int main(int argc, char *argv[]) {
     signal(SIGINT, signal_handler); // Set up signal handler
-    uint64_t block_size = 512; // default block size
+    uint64_t block_size = 1048576;
     uint64_t count = 0; // default count (0 means copy until EOF)
     char *input_file_name = NULL;
     char *output_file_name = NULL;
+    char *block_size_arg = NULL;
     bool encountered_error = false;
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -74,7 +94,7 @@ int main(int argc, char *argv[]) {
                 break;
             }
         } else if (strncmp(argv[i], "bs=", 3) == 0) {
-            block_size = atoi(argv[i] + 3);
+            block_size_arg = argv[i] + 3;
         } else if (strncmp(argv[i], "count=", 6) == 0) {
             count = atoi(argv[i] + 6);
         } else {
@@ -84,7 +104,8 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if (!input_file || !output_file_reader|!output_file_writer) {
+
+    if (!input_file || !output_file_reader|!output_file_writer || !block_size_arg) {
         print_usage(argv[0]);
         encountered_error = true;
     }
@@ -94,6 +115,10 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
+
+    block_size = parse_block_size(block_size_arg);
+    printf("\nBlock size: %s", block_size_arg);          // Print the original block size argument
+    printf("\nBlock size [conv]: %" PRIu64 "\n", block_size); // Print the converted block size
 
     // lets check if destination file sizer is bigger or same as source
     bool flag_valid_to_copy = true;
@@ -155,6 +180,10 @@ int main(int argc, char *argv[]) {
         //for printing progress
         size_t printed_count = 0;
         int write_not_write_decider = 0;
+        int progress_dot_print=(10000*512)/block_size;
+        if (progress_dot_print<1){
+            progress_dot_print=1;
+        }
 
 
         while (count == 0 || total_read < count) {
@@ -191,7 +220,7 @@ int main(int argc, char *argv[]) {
             total_read++;
             progress_count++;
             // print the progress
-            if (progress_count > 10000) {
+            if (progress_count > progress_dot_print) {
                 progress_count=0;
                 if (write_not_write_decider > 0) {
                     printf("#");
