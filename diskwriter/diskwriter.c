@@ -19,7 +19,7 @@ void *source_buffer = NULL;
 void *destination_buffer = NULL;
 
 void print_usage(const char *prog_name) {
-    fprintf(stderr, "Usage: %s if=<input file> of=<output file> bs=<block size> count=<number of blocks>\n", prog_name);
+    fprintf(stderr, "Usage: %s if=<input file> of=<output file> bs=<block size[1k,1M,2M,etc]> count=<number of blocks[optional]>\n", prog_name);
 }
 
 void print_error(const char *prefix, const char *file_name) {
