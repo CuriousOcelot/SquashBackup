@@ -10,6 +10,7 @@ import sys
 import unicodedata
 from datetime import datetime
 import re
+from typing import Tuple
 
 
 def get_cmd_args(args: list = None):
@@ -96,19 +97,22 @@ def main():
     sum_ori = read_file(os.path.join(CURRENT_DIR, "original_disk_sum.sha256sum"))  # read the cheksum of the original disk
 
     # cheksum the squashed image backup
-    sha256sum_backup = get_cheksum_cmd(image)  # f"sudo sha256sum {image} > {image}.sha256sum"
-    sum_backup_fsquase = execute_command(sha256sum_backup, CURRENT_DIR)
+    sha256sum_backup = get_cheksum_cmd(image)
+    sum_backup_fsquase_raw = execute_checksum_commands(sha256sum_backup, CURRENT_DIR)
+    sum_backup_fsquase = f"{sum_backup_fsquase_raw}  {image}\n"
     with open(os.path.join(CURRENT_DIR, image + ".sha256sum"), "w") as writable:
         writable.write(sum_backup_fsquase)
 
     #########cheksum the mounted drive##########
     mount = f"sudo mount {image} {emptydir}"
     execute_command(mount, CURRENT_DIR)
-    sha256sum_backup_image = get_cheksum_cmd(os.path.join(emptydir, image_backup))
-    sum_backup = execute_command(sha256sum_backup_image, CURRENT_DIR)
+    image_backup_real_path = os.path.join(emptydir, image_backup)
+    sha256sum_backup_image = get_cheksum_cmd(image_backup_real_path)
+    sum_backup_raw = execute_checksum_commands(sha256sum_backup_image, CURRENT_DIR)
+    sum_backup = f"{sum_backup_raw}  {image_backup_real_path}\n"
 
     #########check backup image filesize##########
-    check_backup_image_filesize_cmd=f'stat --format="%s" {os.path.join(emptydir, image_backup)}'
+    check_backup_image_filesize_cmd = f'stat --format="%s" {os.path.join(emptydir, image_backup)}'
     backup_image_filesize = int(execute_command(check_backup_image_filesize_cmd, CURRENT_DIR))
     #########unmount the image##########
 
@@ -124,8 +128,8 @@ def main():
     print(f"disk size: {disk_size} bytes")
     print(f"backup img size: {backup_image_filesize} bytes")
 
-    backup_error_message=[]
-    if disk_size!=backup_image_filesize:
+    backup_error_message = []
+    if disk_size != backup_image_filesize:
         backup_error_message.append("disk image and backup image size not equal.")
 
     print("")
@@ -138,7 +142,7 @@ def main():
     else:
         backup_error_message.append("disk image and backup image checksum not equal.")
 
-    if len(backup_error_message)==0:
+    if len(backup_error_message) == 0:
         print("Backup successfull!!")
     else:
         print("Backup fail!!")
@@ -146,8 +150,10 @@ def main():
         for _msg in backup_error_message:
             print(f"* {_msg}")
 
+
 def get_cheksum_cmd(file):
-    return f"sudo sha256sum {file}"
+    # return f"sudo sha256sum {file}"
+    return f"sudo dd if={file} bs=64K status=progress", "sha256sum"
 
 
 def execute_command(command: str, path=None):
@@ -162,6 +168,32 @@ def execute_command(command: str, path=None):
         out = out.decode("UTF-8")
     except:
         out = ""
+    return out
+
+
+def execute_checksum_commands(commands: Tuple[str, str], path=None):
+    print(f"Commands: {str(commands)}")
+    dd_command_splited = shlex.split(commands[0])
+    sha256_command_splited = shlex.split(commands[1])
+    if path is None:
+        with subprocess.Popen(dd_command_splited, stdout=subprocess.PIPE) as dd_process:
+            sha256_process = subprocess.Popen(sha256_command_splited, stdin=dd_process.stdout, stdout=subprocess.PIPE)
+            dd_process.stdout.close()  # Allow dd_process to receive a SIGPIPE if sha256sum exits.
+            # Get the output from sha256sum
+            sha256_output, _ = sha256_process.communicate()
+    else:
+        with subprocess.Popen(dd_command_splited, cwd=path, stdout=subprocess.PIPE) as dd_process:
+            sha256_process = subprocess.Popen(sha256_command_splited, cwd=path, stdin=dd_process.stdout,
+                                              stdout=subprocess.PIPE)
+            dd_process.stdout.close()  # Allow dd_process to receive a SIGPIPE if sha256sum exits.
+            # Get the output from sha256sum
+            sha256_output, _ = sha256_process.communicate()
+    try:
+        out = sha256_output.decode("UTF-8").strip().split(" ")[0]
+    except Exception as e:
+        out = ""
+        print(f"Error: {e}")
+        raise e
     return out
 
 
