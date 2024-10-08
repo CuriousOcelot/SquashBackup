@@ -9,8 +9,8 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <signal.h>
-#include <time.h>
 #include <inttypes.h>
+#include <sys/time.h>
 
 FILE *input_file = NULL;
 FILE *output_file_reader = NULL;
@@ -23,11 +23,9 @@ void print_usage(const char *prog_name) {
 }
 
 void print_error(const char *prefix, const char *file_name) {
-    // Create a buffer for the error message
-    char error_message[256]; // Adjust size as needed
+    char error_message[256];
     snprintf(error_message, sizeof(error_message), "%s %s", prefix, file_name);
-
-    fprintf(stderr, "%s\n", error_message); // Print the error message with a newline
+    fprintf(stderr, "%s\n", error_message);
 }
 
 void cleanup() {
@@ -41,11 +39,9 @@ void cleanup() {
 void signal_handler(int signal) {
     printf("\nReceived signal %d, cleaning up...\n", signal);
     cleanup();
-
     printf("\nExiting...\n");
     exit(EXIT_FAILURE);
 }
-
 
 uint64_t parse_block_size(const char *arg) {
     char *endptr;
@@ -72,6 +68,7 @@ int main(int argc, char *argv[]) {
     char *output_file_name = NULL;
     char *block_size_arg = NULL;
     bool encountered_error = false;
+
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
         if (strncmp(argv[i], "if=", 3) == 0) {
@@ -104,7 +101,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-
     if (!input_file || !output_file_reader|!output_file_writer || !block_size_arg) {
         print_usage(argv[0]);
         encountered_error = true;
@@ -115,10 +111,9 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-
     block_size = parse_block_size(block_size_arg);
     printf("\nBlock size: %s", block_size_arg);          // Print the original block size argument
-    printf("\nBlock size [conv]: %" PRIu64 "\n", block_size); // Print the converted block size
+    printf("\nBlock size [bytes]: %" PRIu64 "\n", block_size); // Print the converted block size
 
     // lets check if destination file sizer is bigger or same as source
     bool flag_valid_to_copy = true;
@@ -137,12 +132,12 @@ int main(int argc, char *argv[]) {
     long inputfile_block_size = inputfile_stat.st_size / block_size;
     if (inputfile_block_size == 0) {
         inputfile_block_size = 1; // so that we dont devide by zero when caculating pc
-        printf("input block size: unknown\n");
+        printf("input block count: unknown\n");
     }
     long outputfile_block_size = outputfile_stat.st_size / block_size;
 
     if (outputfile_stat.st_size == 0) {
-        printf("output block size: unknown\n");
+        printf("output block count: unknown\n");
     } else {
         if (inputfile_stat.st_size > outputfile_stat.st_size) {
             fprintf(stderr, "Error: input file larger than destination file\n");
@@ -150,7 +145,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    printf("input block size: %lu  |  output block size: %lu\n", inputfile_block_size, outputfile_block_size);
+    printf("input block count: %lu  |  output block count: %lu\n", inputfile_block_size, outputfile_block_size);
     void *source_buffer = malloc(block_size);
 
     if (!source_buffer) {
@@ -171,7 +166,8 @@ int main(int argc, char *argv[]) {
 
     if (flag_valid_to_copy) {
         // initialize the buffer to store the remporary readed files
-        clock_t start_time = clock();
+        struct timeval start, end;
+        gettimeofday(&start, NULL);
         long total_read = 0;
         long progress_count = 0;
         long last_write_position = 0;
@@ -243,8 +239,8 @@ int main(int argc, char *argv[]) {
         free(source_buffer);
         free(destination_buffer);
 
-        clock_t end_time = clock();
-        double elapsed_time = (double) (end_time - start_time) / CLOCKS_PER_SEC;
+        gettimeofday(&end, NULL);
+        double elapsed_time = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         int hours = (int) (elapsed_time / 3600);
         int minutes = (int) ((elapsed_time - hours * 3600) / 60);
         int seconds = (int) (elapsed_time - hours * 3600 - minutes * 60);
