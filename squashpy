@@ -85,7 +85,7 @@ def main():
     emptydir = os.path.join(CURRENT_DIR, "empty-dir")
     if os.path.isdir(emptydir) or os.path.isfile(emptydir):
         print(f"{emptydir} is already exist")
-        return  # TODO
+        return
 
     while True:
         user_input = input(f"{file_type}: '{drive_name}' , Name: '{image}' (y/n): ").strip().lower()
@@ -96,7 +96,7 @@ def main():
         else:
             print("Invalid input. Please enter 'y' or 'n'.")
     ################# prepare for backup##############
-    os.makedirs(emptydir)  # TODO
+    os.makedirs(emptydir)
     original_checksum_name = "original_checksum.sha256sum"
 
     # as i am not a bash shell script expert , lets make a backup oneliner temporary script
