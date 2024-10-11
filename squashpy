@@ -28,7 +28,6 @@ def get_cmd_args(args: list = None):
         "--backup_name",
         metavar="BACKUP",
         help="The name of the backup",
-        required=True,
     )
 
     parser.add_argument(
@@ -48,21 +47,40 @@ def main():
         print("Please run in an empty directory!")
         sys.exit()
     arguments = get_cmd_args()
+    # lets parse the autodate string to add to backup image
     autodate = arguments.autodate
-
-    backupname = slugify(arguments.backup_name)
     if autodate:
-        backupname += "_" + datetime.now().strftime("%d_%m_%Y__%I_%M_%S_%p")
-
-    ##########derive the names##########
-    image = backupname + ".img"
-    image_backup = backupname + "_backup.img"
+        bakup_timestamp = "." + datetime.now().strftime("%d_%m_%Y__%I_%M_%S_%p")
+    else:
+        bakup_timestamp = ""
     drive_name = arguments.drive
+    backupname = arguments.backup_name
+    if backupname is None:
+        backupname, extension = get_file_name_and_extension(drive_name)
+        backupname = slugify(backupname)
+        image = f"{backupname}{extension}{bakup_timestamp}.sqsh"
+        image_backup = f"{backupname}{extension}"
+    else:
+        backupname, extension = get_file_name_and_extension(backupname)
+        backupname = slugify(backupname)
+        image = f"{backupname}{extension}{bakup_timestamp}.sqsh"
+        image_backup = f"{backupname}{extension}"
+        if not image_backup.endswith(".img"):
+            image_backup += ".img"
+
     ####################################
     # Check if drive exist
-    if not disk_exists(drive_name):
-        print(f"{drive_name} does not disk_exists")
-        return
+    if disk_exists(drive_name):
+        flag_is_disk = True
+        file_type = "Disk"
+    else:
+        flag_is_disk = False
+        file_type = "File"
+        drive_name = os.path.realpath(os.path.expanduser(drive_name))
+        if not os.path.isfile(drive_name):
+            print(f"No such drive of file named \"{drive_name}\"")
+            return
+
     ##################################
     emptydir = os.path.join(CURRENT_DIR, "empty-dir")
     if os.path.isdir(emptydir) or os.path.isfile(emptydir):
@@ -70,7 +88,7 @@ def main():
         return  # TODO
 
     while True:
-        user_input = input(f"Disk: '{drive_name}' , Name: '{image}' (y/n): ").strip().lower()
+        user_input = input(f"{file_type}: '{drive_name}' , Name: '{image}' (y/n): ").strip().lower()
         if user_input == 'y':
             break  # Exit the loop since a valid input was received
         elif user_input == 'n':
@@ -79,9 +97,10 @@ def main():
             print("Invalid input. Please enter 'y' or 'n'.")
     ################# prepare for backup##############
     os.makedirs(emptydir)  # TODO
+    original_checksum_name = "original_checksum.sha256sum"
 
     # as i am not a bash shell script expert , lets make a backup oneliner temporary script
-    temp_one_line_backup = f'#!/bin/bash\nsudo dd if={drive_name} bs=4M status=progress | tee >(sha256sum > {os.path.join(CURRENT_DIR, "original_disk_sum.sha256sum")})'
+    temp_one_line_backup = f'#!/bin/bash\nsudo dd if={drive_name} bs=4M status=progress | tee >(sha256sum > {os.path.join(CURRENT_DIR, original_checksum_name)})'
     temp_script_loc = os.path.join(CURRENT_DIR, "bck_script.sh")
     with open(temp_script_loc, "w") as writer:
         writer.write(temp_one_line_backup)
@@ -90,11 +109,10 @@ def main():
     # now run the back up script
     cmd = f"sudo mksquashfs {emptydir} {image} -p '{image_backup} f 444 root root {temp_script_loc}'"
     print(cmd)
-    execute_command_simple(cmd, CURRENT_DIR)  # TODO
-    # TODO remove the temporry script
+    execute_command_simple(cmd, CURRENT_DIR)
     os.remove(temp_script_loc)
     ############### check checksum ##################
-    sum_ori = read_file(os.path.join(CURRENT_DIR, "original_disk_sum.sha256sum"))  # read the cheksum of the original disk
+    sum_ori = read_file(os.path.join(CURRENT_DIR, original_checksum_name))  # read the cheksum of the original disk/file
 
     # cheksum the squashed image backup
     sha256sum_backup = get_cheksum_cmd(image)
@@ -112,7 +130,7 @@ def main():
     sum_backup = f"{sum_backup_raw}  {image_backup_real_path}\n"
 
     #########check backup image filesize##########
-    check_backup_image_filesize_cmd = f'stat --format="%s" {os.path.join(emptydir, image_backup)}'
+    check_backup_image_filesize_cmd = f'stat --format="%s" {os.path.join(emptydir, image_backup)}'  # TODO HANDLE FOR FILE NAME
     backup_image_filesize = int(execute_command(check_backup_image_filesize_cmd, CURRENT_DIR))
     #########unmount the image##########
 
@@ -120,27 +138,31 @@ def main():
     execute_command(umount, CURRENT_DIR)
     ################################
 
-    #########check disksize##########
-    check_disksize_cmd = f'sudo blockdev --getsize64 {drive_name}'
-    disk_size = int(execute_command(check_disksize_cmd, CURRENT_DIR))
+    #########check disksize/filesize##########
+    if flag_is_disk is True:
+        check_disksize_cmd = f'sudo blockdev --getsize64 {drive_name}'
+        dusk_or_file_size = int(execute_command(check_disksize_cmd, CURRENT_DIR))
+    else:
+        check_filesize_cmd = f'stat --format="%s" {drive_name}'
+        dusk_or_file_size = int(execute_command(check_filesize_cmd, CURRENT_DIR))
 
     print("")
-    print(f"disk size: {disk_size} bytes")
+    print(f"{file_type.lower()} size: {dusk_or_file_size} bytes")
     print(f"backup img size: {backup_image_filesize} bytes")
 
     backup_error_message = []
-    if disk_size != backup_image_filesize:
-        backup_error_message.append("disk image and backup image size not equal.")
+    if dusk_or_file_size != backup_image_filesize:
+        backup_error_message.append(f"{file_type.lower()} image and backup image size not equal.")
 
     print("")
-    print(f"disk sum: {sum_ori}")
+    print(f"{file_type.lower()} sum: {sum_ori}")
     print(f"bckmnt sum: {sum_backup}")
     print(f"backup sum: {sum_backup_fsquase}")
 
     if sum_ori.split(" ")[0] == sum_backup.split(" ")[0]:
         pass
     else:
-        backup_error_message.append("disk image and backup image checksum not equal.")
+        backup_error_message.append(f"{file_type.lower()}  image and backup image checksum not equal.")
 
     if len(backup_error_message) == 0:
         print("Backup successfull!!")
@@ -239,6 +261,11 @@ def slugify(value, allow_unicode=False):
 def read_file(path):
     with open(path, "r") as reader:
         return reader.read()
+
+
+def get_file_name_and_extension(file_path):
+    file_name, file_extension = os.path.splitext(os.path.basename(file_path))
+    return file_name, file_extension or ""  # Ensure empty string for no extension
 
 
 if __name__ == "__main__":

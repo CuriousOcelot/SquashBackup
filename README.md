@@ -25,8 +25,8 @@ The script performs the following tasks:
 1. Create an empty directory for the backup.
 2. Navigate to the directory:
    `cd /path/to/empty_directory`
-3. Run the script `squash_fs_bck` with the following options:<br>
-   `../PathToSquashBackup/SquashBackup/squash_fs_bck -d /dev/sda -n NameOftheBackup -a`
+3. Run the script `squashpy` with the following options:<br>
+   `../PathToSquashBackup/SquashBackup/squashpy -d /dev/sda -n NameOftheBackup -a`
 
 - `-d`: Specify the name of the disk you want to backup (e.g., `/dev/sda`).
 - `-n`: Provide a name for the backup.
@@ -35,7 +35,7 @@ The script performs the following tasks:
 ### Example
 
 To backup `/dev/sda` with the name "MyBackup" and append a timestamp:
-`./PathToSquashBackup/SquashBackup/squash_fs_bck -d /dev/sda -n MyBackup -a`
+`./PathToSquashBackup/SquashBackup/squashpy -d /dev/sda -n MyBackup -a`
 
 
 ## Contributing
