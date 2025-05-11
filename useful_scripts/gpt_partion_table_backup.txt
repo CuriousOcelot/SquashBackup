@@ -1,0 +1,7 @@
+# Backup
+sudo sgdisk --backup=backup.gpt /dev/sdX
+
+
+# Restore
+sudo sgdisk --load-backup=backup.gpt /dev/sdX
+
